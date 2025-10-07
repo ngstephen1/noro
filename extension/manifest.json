@@ -4,7 +4,12 @@
   "version": "1.0",
   "manifest_version": 3,
   "action": {
-    "default_popup": "index.html",
-    "default_icon": "/public/assets/icon_128.png"
+    "default_popup": "index.html"
+  },
+  "icons": {
+    "16": "/public/assets/icon_16.png",
+    "32": "/public/assets/icon_32.png",
+    "48": "/public/assets/icon_48.png",
+    "128": "/public/assets/icon_128.png"
   }
 }

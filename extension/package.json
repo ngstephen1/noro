@@ -4,6 +4,10 @@
     "description": "The Mental Context Recovery Agent",
     "type": "module",
     "main": "index.ts",
+    "scripts": {
+        "build": "tsc",
+        "watch": "tsc --watch"
+    },
     "devDependencies": {
         "@types/chrome": "^0.1.22",
         "typescript": "^5.9.3"

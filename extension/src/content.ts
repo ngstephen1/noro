@@ -3,6 +3,7 @@ interface ContextData {
     title: string;
     timestamp: number;
     type: 'google-sheets' | 'google-docs' | 'google-slides' | 'google-forms' | 'gmail' | 'article' | 'search' | 'general' | 'unknown';
+    searchQuery?: string;
 }
 
 function detectPageType(): { type: ContextData['type'], searchQuery?: string} {
@@ -27,4 +28,5 @@ function extractSearchQuery(url: string): string | null {
     const urlObj = new URL(url);
     if(url.includes("google.com/search") || url.includes("bing.com/search") || url.includes("duckduckgo.com")) return urlObj.searchParams.get('q');
     return null;
+}
 }

@@ -1,4 +1,4 @@
-interface ContextData {
+interface PageSnapshot<T = any> {
 	url: string;
 	title: string;
 	timestamp: number;
@@ -12,10 +12,11 @@ interface ContextData {
 		| "search"
 		| "general"
 		| "unknown";
-	searchQuery?: string;
+	searchQuery?: string | null;
+	data?: T;
 }
 
-function detectPageType(): { type: ContextData["type"]; searchQuery?: string } {
+function detectPageType(): { type: PageSnapshot["type"]; searchQuery?: string } {
 	const url = window.location.href;
 	// Google Workspace
 	if (url.includes("docs.google.com/spreadsheets"))
@@ -47,20 +48,31 @@ function extractSearchQuery(url: string): string | null {
 	return null;
 }
 
-function captureContext(): ContextData {
+function captureSnapshot(): PageSnapshot {
 	const detection = detectPageType();
-
-	const context: ContextData = {
+	const snapshot: PageSnapshot = {
 		url: window.location.href,
 		title: document.title,
 		timestamp: Date.now(),
 		type: detection.type,
 		searchQuery: detection.searchQuery,
+		data: captureSnapshotData(detection.type),
 	};
+	return snapshot;
+}
 
-	console.log("[NORO] Basic context captured!", context);
-	return context;
+function captureSnapshotData(type: PageSnapshot["type"]): any {
+	switch (type) {
+		default:
+			return null;
+	}
+}
+
 }
 
 console.log("[NORO] Content script loaded");
-captureContext();
+console.log("[NORO] Waiting 5 seconds before capturing context...");
+setTimeout(() => {
+	console.log("[NORO] 5 seconds elapsed, capturing context now!");
+	captureSnapshot();
+}, 5000);

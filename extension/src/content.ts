@@ -12,13 +12,24 @@ interface PageSnapshot<T = any> {
 		| "search"
 		| "general"
 		| "unknown";
-	searchQuery?: string | null;
 	data?: T;
 }
 
 interface ArticleData {
 	scrollPositionPercent: number;
 	visibleText: string;
+}
+
+interface SearchData {
+	searchQuery: string;
+	searchResults: SearchResultData[];
+	searchEngine: string;
+}
+
+interface SearchResultData {
+	title: string;
+	url: string;
+	isClicked: boolean;
 }
 
 function detectPageType(): { type: PageSnapshot["type"]; searchQuery?: string } {
@@ -53,7 +64,6 @@ function captureSnapshot(): PageSnapshot {
 		title: document.title,
 		timestamp: Date.now(),
 		type: detection.type,
-		searchQuery: detection.searchQuery,
 		data: captureSnapshotData(detection.type),
 	};
 	console.log('Captured snapshot: ', snapshot);

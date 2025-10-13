@@ -19,12 +19,9 @@ interface PageSnapshot<T = any> {
 function detectPageType(): { type: PageSnapshot["type"]; searchQuery?: string } {
 	const url = window.location.href;
 	// Google Workspace
-	if (url.includes("docs.google.com/spreadsheets"))
-		return { type: "google-sheets" };
-	if (url.includes("docs.google.com/document"))
-		return { type: "google-docs" };
-	if (url.includes("docs.google.com/presentation"))
-		return { type: "google-slides" };
+	if (url.includes("docs.google.com/spreadsheets")) return { type: "google-sheets" };
+	if (url.includes("docs.google.com/document")) return { type: "google-docs" };
+	if (url.includes("docs.google.com/presentation")) return { type: "google-slides" };
 	if (url.includes("docs.google.com/forms")) return { type: "google-forms" };
 	if (url.includes("mail.google.com")) return { type: "gmail" };
 	// Search engines
@@ -39,11 +36,7 @@ function detectPageType(): { type: PageSnapshot["type"]; searchQuery?: string } 
 
 function extractSearchQuery(url: string): string | null {
 	const urlObj = new URL(url);
-	if (
-		url.includes("google.com/search") ||
-		url.includes("bing.com/search") ||
-		url.includes("duckduckgo.com")
-	)
+	if (url.includes("google.com/search") || url.includes("bing.com/search") || url.includes("duckduckgo.com"))
 		return urlObj.searchParams.get("q");
 	return null;
 }

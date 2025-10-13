@@ -60,7 +60,7 @@ function captureSnapshot(): PageSnapshot {
 		type: detection.type,
 		data: captureSnapshotData(detection.type),
 	};
-	console.log('Captured snapshot: ', snapshot);
+	console.log("Captured snapshot: ", snapshot);
 	return snapshot;
 }
 
@@ -81,15 +81,15 @@ function captureArticleData(): ArticleData {
 	);
 	// Visible text in this context means the first 500 characters that are currently visible
 	const centerElement = document.elementFromPoint(window.innerWidth / 2, window.innerHeight / 2);
-	let visibleText = '';
+	let visibleText = "";
 	if (centerElement) {
-		const textContainer = centerElement.closest('p, h2, h3') || centerElement;
-		visibleText = textContainer.textContent?.trim().slice(0,1000) || '';
+		const textContainer = centerElement.closest("p, h2, h3") || centerElement;
+		visibleText = textContainer.textContent?.trim().slice(0, 1000) || "";
 	}
 	const articleData: ArticleData = {
 		scrollPositionPercent,
-		visibleText
-	}
+		visibleText,
+	};
 	return articleData;
 }
 

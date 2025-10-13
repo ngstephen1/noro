@@ -56,6 +56,7 @@ function captureSnapshot(): PageSnapshot {
 		searchQuery: detection.searchQuery,
 		data: captureSnapshotData(detection.type),
 	};
+	console.log('Captured snapshot: ', snapshot);
 	return snapshot;
 }
 
@@ -85,8 +86,8 @@ function captureArticleData(): ArticleData {
 }
 
 console.log("[NORO] Content script loaded");
-console.log("[NORO] Waiting 5 seconds before capturing context...");
+console.log("[NORO] Waiting 5 seconds before capturing snapshot...");
 setTimeout(() => {
-	console.log("[NORO] 5 seconds elapsed, capturing context now!");
+	console.log("[NORO] 5 seconds elapsed, capturing snapshot now!");
 	captureSnapshot();
 }, 5000);

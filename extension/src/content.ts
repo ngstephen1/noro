@@ -68,13 +68,17 @@ function captureSnapshotData(type: PageSnapshot["type"]): any {
 	switch (type) {
 		case "article":
 			return captureArticleData();
+		case "search":
+			return captureSearchData();
 		default:
 			return null;
 	}
 }
 
 function captureArticleData(): ArticleData {
-	const scrollPositionPercent = Math.round((window.scrollY / (document.body.scrollHeight - window.innerHeight)) * 100);
+	const scrollPositionPercent = Math.round(
+		(window.scrollY / (document.body.scrollHeight - window.innerHeight)) * 100
+	);
 	// Visible text in this context means the first 500 characters that are currently visible
 	const centerElement = document.elementFromPoint(window.innerWidth / 2, window.innerHeight / 2);
 	let visibleText = '';
@@ -87,6 +91,30 @@ function captureArticleData(): ArticleData {
 		visibleText
 	}
 	return articleData;
+}
+
+function captureSearchData(): SearchData {
+	const searchQuery = new URL(window.location.href).searchParams.get("q") || "";
+	const searchEngine = window.location.href.includes("google.com")
+		? "Google"
+		: window.location.href.includes("bing.com")
+		? "Bing"
+		: window.location.href.includes("duckduckgo.com")
+		? "DuckDuckGo"
+		: "unknown";
+	const links = document.querySelectorAll("#search span a, h2 a, h3 a");
+	const searchResults: SearchResultData[] = Array.from(links).map((link) => ({
+		title: link.textContent?.trim() || "Untitled",
+		url: (link as HTMLAnchorElement).href,
+		// TODO Implement a way to track whether a link has been clicked or not in the past for a better analysis
+		isClicked: false,
+	}));
+	const searchData: SearchData = {
+		searchQuery,
+		searchResults,
+		searchEngine,
+	};
+	return searchData;
 }
 
 console.log("[NORO] Content script loaded");

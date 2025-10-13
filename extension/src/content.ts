@@ -51,13 +51,6 @@ function detectPageType(): { type: PageSnapshot["type"] } {
 	return { type: "unknown" };
 }
 
-function extractSearchQuery(url: string): string | null {
-	const urlObj = new URL(url);
-	if (url.includes("google.com/search") || url.includes("bing.com/search") || url.includes("duckduckgo.com"))
-		return urlObj.searchParams.get("q");
-	return null;
-}
-
 function captureSnapshot(): PageSnapshot {
 	const detection = detectPageType();
 	const snapshot: PageSnapshot = {

@@ -32,7 +32,7 @@ interface SearchResultData {
 	isClicked: boolean;
 }
 
-function detectPageType(): { type: PageSnapshot["type"]; searchQuery?: string } {
+function detectPageType(): { type: PageSnapshot["type"] } {
 	const url = window.location.href;
 	// Google Workspace
 	if (url.includes("docs.google.com/spreadsheets")) return { type: "google-sheets" };
@@ -41,8 +41,9 @@ function detectPageType(): { type: PageSnapshot["type"]; searchQuery?: string } 
 	if (url.includes("docs.google.com/forms")) return { type: "google-forms" };
 	if (url.includes("mail.google.com")) return { type: "gmail" };
 	// Search engines
-	const searchQuery = extractSearchQuery(url);
-	if (searchQuery) return { type: "search", searchQuery };
+	const urlObj = new URL(url);
+	if (urlObj.searchParams.has("q") || urlObj.searchParams.has("query") || urlObj.searchParams.has("search"))
+		return { type: "search" };
 	// Web articles
 	if (document.querySelector("article")) return { type: "article" }; // TODO this approach may be too simple for article detection, find a better way to do this
 	// General web browsing

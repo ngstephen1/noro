@@ -16,6 +16,11 @@ interface PageSnapshot<T = any> {
 	data?: T;
 }
 
+interface ArticleData {
+	scrollPositionPercent: number;
+	visibleText: string;
+}
+
 function detectPageType(): { type: PageSnapshot["type"]; searchQuery?: string } {
 	const url = window.location.href;
 	// Google Workspace
@@ -56,11 +61,27 @@ function captureSnapshot(): PageSnapshot {
 
 function captureSnapshotData(type: PageSnapshot["type"]): any {
 	switch (type) {
+		case "article":
+			return captureArticleData();
 		default:
 			return null;
 	}
 }
 
+function captureArticleData(): ArticleData {
+	const scrollPositionPercent = Math.round((window.scrollY / (document.body.scrollHeight - window.innerHeight)) * 100);
+	// Visible text in this context means the first 500 characters that are currently visible
+	const centerElement = document.elementFromPoint(window.innerWidth / 2, window.innerHeight / 2);
+	let visibleText = '';
+	if (centerElement) {
+		const textContainer = centerElement.closest('p, h2, h3') || centerElement;
+		visibleText = textContainer.textContent?.trim().slice(0,1000) || '';
+	}
+	const articleData: ArticleData = {
+		scrollPositionPercent,
+		visibleText
+	}
+	return articleData;
 }
 
 console.log("[NORO] Content script loaded");

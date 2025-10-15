@@ -15,6 +15,32 @@ interface PageSnapshot<T = any> {
 	data?: T;
 }
 
+interface GoogleDocsData {
+	documentName: string;
+	screenshot: string | null;
+}
+
+interface GoogleSheetsData {
+	workbook: string;
+	activeSheet?: string;
+	selectedRange?: string;
+	screenshot: string | null;
+}
+
+interface GoogleSlidesData {
+	presentationName: string;
+	screenshot: string | null;
+}
+
+interface GoogleFormsData {
+	formName: string;
+	screenshot: string | null;
+}
+
+interface GmailData {
+	screenshot: string | null;
+}
+
 interface ArticleData {
 	scrollPositionPercent: number;
 	visibleText: string;
@@ -35,8 +61,8 @@ interface SearchResultData {
 function detectPageType(): { type: PageSnapshot["type"] } {
 	const url = window.location.href;
 	// Google Workspace
-	if (url.includes("docs.google.com/spreadsheets")) return { type: "google-sheets" };
 	if (url.includes("docs.google.com/document")) return { type: "google-docs" };
+	if (url.includes("docs.google.com/spreadsheets")) return { type: "google-sheets" };
 	if (url.includes("docs.google.com/presentation")) return { type: "google-slides" };
 	if (url.includes("docs.google.com/forms")) return { type: "google-forms" };
 	if (url.includes("mail.google.com")) return { type: "gmail" };
@@ -66,13 +92,77 @@ function captureSnapshot(): PageSnapshot {
 
 function captureSnapshotData(type: PageSnapshot["type"]): any {
 	switch (type) {
-		case "article":
-			return captureArticleData();
+		case "google-docs":
+			return captureGoogleDocsData();
+		case "google-sheets":
+			return captureGoogleSheetsData();
+		case "google-slides":
+			return captureGoogleSlidesData();
+		case "google-forms":
+			return captureGoogleFormsData();
+		case "gmail":
+			return captureGmailData();
 		case "search":
 			return captureSearchData();
+		case "article":
+			return captureArticleData();
 		default:
 			return null;
 	}
+}
+
+function captureGoogleDocsData(): GoogleDocsData {
+	const documentName = document.title.split(" - Google Docs")[0] || "Unknown Document";
+
+	const googleDocsData: GoogleDocsData = {
+		documentName,
+		screenshot: null,
+	};
+	return googleDocsData;
+}
+
+function captureGoogleSheetsData(): GoogleSheetsData {
+	const workbook = document.title.split(" - Google Sheets")[0] || "Unknown Workbook Name";
+	const activeSheet =
+		document.querySelector(".docs-sheet-active-tab .docs-sheet-tab-name")?.textContent?.trim() ||
+		"Unknown Sheet Name";
+	const nameBox = document.querySelector("#t-name-box") as HTMLInputElement;
+	const selectedRange = nameBox.value || "Unknown";
+
+	const googleSheetsData: GoogleSheetsData = {
+		workbook,
+		activeSheet,
+		selectedRange,
+		screenshot: null,
+	};
+	return googleSheetsData;
+}
+
+function captureGoogleSlidesData(): GoogleSlidesData {
+	const presentationName = document.title.split(" - Google Slides")[0] || "Unknown Presentation";
+
+	const googleSlidesData: GoogleSlidesData = {
+		presentationName,
+		screenshot: null,
+	};
+	return googleSlidesData;
+}
+
+function captureGoogleFormsData(): GoogleFormsData {
+	const formName = document.title.split(" - Google Forms")[0] || "Unknown Form";
+
+	const googleFormsData: GoogleFormsData = {
+		formName,
+		screenshot: null,
+	};
+	return googleFormsData;
+}
+
+function captureGmailData(): GmailData {
+	const gmailData: GmailData = {
+		screenshot: null,
+	};
+	return gmailData;
 }
 
 function captureArticleData(): ArticleData {

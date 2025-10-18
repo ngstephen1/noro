@@ -7,12 +7,13 @@
 		"default_popup": "index.html",
 		"default_title": "Noro"
 	},
-	"content_scripts": [
-    {
-      "matches": ["<all_urls>"],
-      "js": ["dist/content.js"]
-    }
-  ],
+	"permissions": ["activeTab", "tabs", "storage", "scripting", "idle"],
+	"host_permissions": ["<all_urls>"],
+	"background": {
+
+		"service_worker": "dist/background.js",
+		"type": "module"
+	},
 	"icons": {
 		"16": "/public/assets/icon_16.png",
 		"32": "/public/assets/icon_32.png",

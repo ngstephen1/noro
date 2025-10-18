@@ -1,0 +1,10 @@
+{
+  "version": "2.0",
+  "routeKey": "POST /context",
+  "rawPath": "/context",
+  "rawQueryString": "",
+  "headers": { "content-type": "application/json" },
+  "requestContext": { "http": { "method": "POST" } },
+  "isBase64Encoded": false,
+  "body": "{\"correlation_id\":\"c-173\",\"user_id\":\"dev-user\",\"ts\":\"2025-10-14T13:21:33Z\",\"event\":\"manual_capture\",\"active_app\":\"chrome\",\"tabs\":[{\"title\":\"PIA PRD - Google Docs\",\"url_hash\":\"deadbeef\",\"text_sample\":\"editing Next Steps\",\"cursor_context\":\"\"}],\"signals\":{\"idle_sec\":0,\"calendar_busy\":false,\"slack_ping\":false},\"privacy\":{\"redacted\":true,\"allowlist\":[\"docs.google.com\",\"github.com\"]}}"
+}

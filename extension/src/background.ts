@@ -1,3 +1,8 @@
+interface ExpirationConfig {
+	retentionMs: number;
+	cleanupIntervalMinutes: number;
+}
+
 interface PageSnapshot<T = any> {
 	url: string;
 	title: string;
@@ -92,6 +97,41 @@ chrome.idle.onStateChanged.addListener((newState) => {
 		// TODO trigger a notification to the user once their context has been analyzed
 	}
 });
+
+const DEFAULT_EXPIRATION: ExpirationConfig = {
+	retentionMs: 7 * 24 * 60 * 60 * 1000,
+	cleanupIntervalMinutes: 1440,
+};
+
+cleanupExpiredSnapshots();
+
+async function cleanupExpiredSnapshots() {
+	try {
+		const cutoff = Date.now() - DEFAULT_EXPIRATION.retentionMs;
+		// There's no getAll function, so I improvised
+		const allData = await chrome.storage.local.get(null);
+		const toBeDeleted: string[] = []
+
+		for (const [key, value] of Object.entries(allData)) {
+			if(key.startsWith('workspace_')) {
+				const workspace = value as WorkspaceCapture;
+				if (workspace.timestamp < cutoff) {
+					toBeDeleted.push(key);
+					workspace.windows.forEach(window => window.tabs.forEach(tab => tab.snapshot.data?.screenshot && toBeDeleted.push(tab.snapshot.data.screenshot)));
+				} else if (key.startsWith('img_')){
+					const match = key.match(/img_(\d+)_/);
+					if (match && parseInt(match[1]) < cutoff) toBeDeleted.push(key);
+				}
+			}
+		}
+		if (toBeDeleted.length) {
+			await chrome.storage.local.remove(toBeDeleted);
+			console.log('[NORO] Cleaned', toBeDeleted.length, 'expired items');
+		}
+	} catch (e) {
+		console.error('[NORO] Cleanup failed: ', e)
+	}
+}
 
 async function captureWorkspace() {
 	isCapturing = true;

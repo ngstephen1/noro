@@ -1,4 +1,4 @@
-# Noro: The Mental Context Recovery Agent
+# Noro: The Productivity Intelligence Agent
 
 ## Created by Team Get Noro Right Now
 Mohamed Ghoul (Developer) - [GitHub](https://www.github.com/mohamedghoul), [Linkedin](https://www.linkedin.com/in/mohamedghoul)  

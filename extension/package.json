@@ -1,7 +1,7 @@
 {
     "name": "noro",
     "version": "1.0.0",
-    "description": "The Mental Context Recovery Agent",
+    "description": "The Productivity Intelligence Agent",
     "type": "module",
     "main": "index.ts",
     "scripts": {

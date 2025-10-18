@@ -57,6 +57,113 @@ interface SearchResultData {
 	url: string;
 	isClicked: boolean;
 }
+
+interface TabSnapshot {
+	tabId: number;
+	isActive: boolean;
+	snapshot: PageSnapshot;
+}
+
+interface WindowSnapshot {
+	windowId: number;
+	activeTabId: number;
+	tabs: TabSnapshot[];
+}
+
+interface WorkspaceCapture {
+	timestamp: number;
+	windows: WindowSnapshot[];
+}
+
+// Using a local variable and Chrome state management instead of more modern ways of state management here for the sake of keeping the bundle size and complexity minimal for a hackathon MVP
+// TODO If time allows, investigate and improve state management
+let isCapturing = false;
+
+// Idle detection logic
+// TODO Replace the hardcoded value of 5 minutes (300 seconds) with a user-adjustable value
+chrome.idle.setDetectionInterval(15);
+chrome.idle.onStateChanged.addListener((newState) => {
+	if (newState === "idle" && !isCapturing) {
+		console.log("[NORO] User went idle! Capturing and analyzing workspace now...");
+		captureWorkspace();
+		// TODO insert function to analyze workspace on AWS
+	} else if (newState === "active") {
+		console.log("[NORO] User returned to the active state.");
+		// TODO trigger a notification to the user once their context has been analyzed
+	}
+});
+
+async function captureWorkspace() {
+	isCapturing = true;
+	console.log("[NORO] Starting workspace capture...");
+	const windows = await chrome.windows.getAll({ populate: true });
+	const workspace: WorkspaceCapture = {
+		timestamp: Date.now(),
+		windows: [],
+	};
+
+	for (const window of windows) {
+		if (!window.tabs?.length) continue;
+		const windowSnapshot: WindowSnapshot = {
+			windowId: window.id!,
+			activeTabId: -1,
+			tabs: [],
+		};
+		// TODO there may be a limitation to the properties we have access to when using window.tabs to get tab data. Find out if it affects extension functionality and fix.
+		for (const tab of window.tabs) {
+			if (!tab.id || !tab.url?.startsWith("http")) continue;
+
+			try {
+				// TODO Maybe the [] around result is not needed. Look into it.
+				const [result] = await chrome.scripting.executeScript({
+					target: { tabId: tab.id },
+					func: capturePageSnapshot,
+				});
+
+				if (result?.result) {
+					if (tab.active) windowSnapshot.activeTabId = tab.id;
+					const tabSnapshot: TabSnapshot = {
+						tabId: tab.id,
+						isActive: tab.active || false,
+						snapshot: result.result,
+					};
+					windowSnapshot.tabs.push(tabSnapshot);
+				}
+			} catch (e) {
+				// TODO The logical conclusion for running into a tab we have failed to capture would be to skip it, but there may be potential for a retry loop to reduce the failure rate...
+				console.error("[NORO] Failed to capture tab:", tab.id, e);
+			}
+		}
+
+		const activeTab = windowSnapshot.tabs.find((tab) => tab.isActive);
+		if (activeTab?.snapshot.data?.screenshot === null) {
+			try {
+				const image = await chrome.tabs.captureVisibleTab(window.id!, { format: "jpeg", quality: 60 });
+				if (image) {
+					const filename = `img_${workspace.timestamp}_${activeTab.tabId}`;
+					await chrome.storage.local.set({ [filename]: image });
+					activeTab.snapshot.data.screenshot = filename;
+					console.log("[NORO] Screenshot saved:", filename);
+				}
+			} catch (e) {
+				// TODO If the screenshotting process fails, do we skip or retry? Figure it out.
+				console.error("[NORO] Screenshot failed:", e);
+			}
+		}
+		if (windowSnapshot.tabs.length) workspace.windows.push(windowSnapshot);
+	}
+
+	await chrome.storage.local.set({ [`workspace_${workspace.timestamp}`]: workspace });
+	console.log(
+		"[NORO] Captured",
+		workspace.windows.length,
+		"windows with",
+		workspace.windows.reduce((sum, w) => sum + w.tabs.length, 0),
+		"total tabs"
+	);
+	isCapturing = false;
+}
+
 function capturePageSnapshot(): PageSnapshot {
 	function detectPageType(): { type: PageSnapshot["type"] } {
 		const url = window.location.href;

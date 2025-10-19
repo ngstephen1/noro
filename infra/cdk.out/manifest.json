@@ -1,0 +1,277 @@
+{
+  "version": "36.3.0",
+  "artifacts": {
+    "PiaStack.assets": {
+      "type": "cdk:asset-manifest",
+      "properties": {
+        "file": "PiaStack.assets.json",
+        "requiresBootstrapStackVersion": 6,
+        "bootstrapStackVersionSsmParameter": "/cdk-bootstrap/hnb659fds/version"
+      }
+    },
+    "PiaStack": {
+      "type": "aws:cloudformation:stack",
+      "environment": "aws://101406169413/us-east-1",
+      "properties": {
+        "templateFile": "PiaStack.template.json",
+        "terminationProtection": false,
+        "validateOnSynth": false,
+        "assumeRoleArn": "arn:${AWS::Partition}:iam::101406169413:role/cdk-hnb659fds-deploy-role-101406169413-us-east-1",
+        "cloudFormationExecutionRoleArn": "arn:${AWS::Partition}:iam::101406169413:role/cdk-hnb659fds-cfn-exec-role-101406169413-us-east-1",
+        "stackTemplateAssetObjectUrl": "s3://cdk-hnb659fds-assets-101406169413-us-east-1/f4b66fe009ae2173104246bc1aadc839afa066f25884e8a8a15994e9facaf6a6.json",
+        "requiresBootstrapStackVersion": 6,
+        "bootstrapStackVersionSsmParameter": "/cdk-bootstrap/hnb659fds/version",
+        "additionalDependencies": [
+          "PiaStack.assets"
+        ],
+        "lookupRole": {
+          "arn": "arn:${AWS::Partition}:iam::101406169413:role/cdk-hnb659fds-lookup-role-101406169413-us-east-1",
+          "requiresBootstrapStackVersion": 8,
+          "bootstrapStackVersionSsmParameter": "/cdk-bootstrap/hnb659fds/version"
+        }
+      },
+      "dependencies": [
+        "PiaStack.assets"
+      ],
+      "metadata": {
+        "/PiaStack/PiaTable": [
+          {
+            "type": "aws:cdk:hasPhysicalName",
+            "data": {
+              "Ref": "PiaTableAC04FA04"
+            }
+          }
+        ],
+        "/PiaStack/PiaTable/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "PiaTableAC04FA04"
+          }
+        ],
+        "/PiaStack/ContextDlq/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ContextDlqE12520FD"
+          }
+        ],
+        "/PiaStack/ContextQueue/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ContextQueueDD9520C1"
+          }
+        ],
+        "/PiaStack/CommonLayer/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "CommonLayer306767A0"
+          }
+        ],
+        "/PiaStack/IngestContextFn/ServiceRole/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "IngestContextFnServiceRoleE3E6BF70"
+          }
+        ],
+        "/PiaStack/IngestContextFn/ServiceRole/DefaultPolicy/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "IngestContextFnServiceRoleDefaultPolicyF86FE531"
+          }
+        ],
+        "/PiaStack/IngestContextFn/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "IngestContextFnBE6DD918"
+          }
+        ],
+        "/PiaStack/ProcessContextFn/ServiceRole/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ProcessContextFnServiceRoleA05569D6"
+          }
+        ],
+        "/PiaStack/ProcessContextFn/ServiceRole/DefaultPolicy/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ProcessContextFnServiceRoleDefaultPolicyCE22CDDA"
+          }
+        ],
+        "/PiaStack/ProcessContextFn/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ProcessContextFn60DD1B9B"
+          }
+        ],
+        "/PiaStack/ProcessContextFn/SqsEventSource:PiaStackContextQueueE283B6CB/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ProcessContextFnSqsEventSourcePiaStackContextQueueE283B6CB96E1DDA5"
+          }
+        ],
+        "/PiaStack/GetInsightsFn/ServiceRole/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "GetInsightsFnServiceRoleF0A63E21"
+          }
+        ],
+        "/PiaStack/GetInsightsFn/ServiceRole/DefaultPolicy/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "GetInsightsFnServiceRoleDefaultPolicy0F2EAFD5"
+          }
+        ],
+        "/PiaStack/GetInsightsFn/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "GetInsightsFn82371C5B"
+          }
+        ],
+        "/PiaStack/PiaApi/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "PiaApi7820A103"
+          }
+        ],
+        "/PiaStack/PiaApi/CloudWatchRole/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "PiaApiCloudWatchRole9D10FBE0"
+          }
+        ],
+        "/PiaStack/PiaApi/Account": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "PiaApiAccount9DA7E3B8"
+          }
+        ],
+        "/PiaStack/PiaApi/Deployment/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "PiaApiDeploymentA199A921b10f7ab39acda262e4e5012a162a52b9"
+          }
+        ],
+        "/PiaStack/PiaApi/DeploymentStage.dev/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "PiaApiDeploymentStagedevD05126C2"
+          }
+        ],
+        "/PiaStack/PiaApi/Endpoint": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "PiaApiEndpointC67E74B6"
+          }
+        ],
+        "/PiaStack/PiaApi/Default/OPTIONS/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "PiaApiOPTIONSBF579278"
+          }
+        ],
+        "/PiaStack/PiaApi/Default/context/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "PiaApicontext68A43AD6"
+          }
+        ],
+        "/PiaStack/PiaApi/Default/context/OPTIONS/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "PiaApicontextOPTIONSD3618D9F"
+          }
+        ],
+        "/PiaStack/PiaApi/Default/context/POST/ApiPermission.PiaStackPiaApiF4FF6445.POST..context": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "PiaApicontextPOSTApiPermissionPiaStackPiaApiF4FF6445POSTcontext0B220475"
+          }
+        ],
+        "/PiaStack/PiaApi/Default/context/POST/ApiPermission.Test.PiaStackPiaApiF4FF6445.POST..context": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "PiaApicontextPOSTApiPermissionTestPiaStackPiaApiF4FF6445POSTcontext9BBBC7B4"
+          }
+        ],
+        "/PiaStack/PiaApi/Default/context/POST/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "PiaApicontextPOST12D846AD"
+          }
+        ],
+        "/PiaStack/PiaApi/Default/insights/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "PiaApiinsightsC1F18DF5"
+          }
+        ],
+        "/PiaStack/PiaApi/Default/insights/OPTIONS/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "PiaApiinsightsOPTIONS3E190859"
+          }
+        ],
+        "/PiaStack/PiaApi/Default/insights/GET/ApiPermission.PiaStackPiaApiF4FF6445.GET..insights": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "PiaApiinsightsGETApiPermissionPiaStackPiaApiF4FF6445GETinsights45D549F2"
+          }
+        ],
+        "/PiaStack/PiaApi/Default/insights/GET/ApiPermission.Test.PiaStackPiaApiF4FF6445.GET..insights": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "PiaApiinsightsGETApiPermissionTestPiaStackPiaApiF4FF6445GETinsights0AEBE68C"
+          }
+        ],
+        "/PiaStack/PiaApi/Default/insights/GET/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "PiaApiinsightsGET0799107B"
+          }
+        ],
+        "/PiaStack/ApiUrl": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiUrl"
+          }
+        ],
+        "/PiaStack/QueueUrl": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "QueueUrl"
+          }
+        ],
+        "/PiaStack/TableName": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "TableName"
+          }
+        ],
+        "/PiaStack/CDKMetadata/Default": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "CDKMetadata"
+          }
+        ],
+        "/PiaStack/BootstrapVersion": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "BootstrapVersion"
+          }
+        ],
+        "/PiaStack/CheckBootstrapVersion": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "CheckBootstrapVersion"
+          }
+        ]
+      },
+      "displayName": "PiaStack"
+    },
+    "Tree": {
+      "type": "cdk:tree",
+      "properties": {
+        "file": "tree.json"
+      }
+    }
+  }
+}

@@ -2,16 +2,12 @@
 import os, json, base64, binascii, re
 from collections import defaultdict
 from typing import Any, Dict, List
-from datetime import datetime, timezone
 from urllib.parse import urlparse
 
 import boto3
 
 from pia_common.bedrock import summarize               # real or stub (by env)
-from pia_common.ddb import (
-    put_activity_summary,      # writes ACT# items
-    put_session_summary,       # writes SESSION# item (compat with insights)
-)
+from pia_common.ddb import put_activity_summary        # writes ACT# items
 
 # ----------------------- API Gateway helpers -------------------------------
 
@@ -75,7 +71,7 @@ def _ocr_with_textract(images: List[Dict[str, Any]]) -> str:
             resp = textract.detect_document_text(Document={"Bytes": im["bytes"]})
             lines = [b["Text"] for b in resp.get("Blocks", []) if b.get("BlockType") == "LINE" and b.get("Text")]
             if lines:
-                chunks.append("\n".join(lines[:50]))
+                chunks.append("\n".join(lines[:40]))
         except Exception:
             continue
     return "\n\n".join(chunks)
@@ -198,71 +194,12 @@ def _ai_label_from_text(text: str) -> str:
     return label or "Activity"
 
 # ------------------------------- Handler -----------------------------------
-def _ms_to_iso(ms):
-    try:
-        return datetime.fromtimestamp(int(ms)/1000, tz=timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
-    except Exception:
-        return ""
 
-def _normalize_teammate_payload(p):
-    """If payload has windows/tabs structure, convert to our internal shape."""
-    if not isinstance(p, dict) or "windows" not in p:
-        return p  # already our shape
-
-    # pick first window; find active tab
-    win = (p.get("windows") or [{}])[0] or {}
-    active_id = win.get("activeTabId")
-    tabs_in = win.get("tabs") or []
-
-    tabs_out = []
-    active_hash = ""
-    for t in tabs_in:
-        url = t.get("url") or ""
-        # choose a hash; fallback to tabId/type/title if URL missing
-        url_hash = (t.get("url") or f"{t.get('type','')}/{t.get('tabId','') or t.get('title','')}")[:64]
-        if active_id and t.get("tabId") == active_id:
-            active_hash = url_hash
-        # screenshot
-        sc = t.get("screenshot") or {}
-        mime = f"image/{(sc.get('format') or 'jpeg').lower()}"
-        data_b64 = sc.get("data") or ""
-        tabs_out.append({
-            "title": t.get("title",""),
-            "url": url,
-            "url_hash": url_hash,
-            "text_sample": "",             # can be filled later from OCR/vision
-            "ocr_excerpt": "",             # optional
-            "type_hint": t.get("type",""), # category hint
-        })
-
-    screenshots = []
-    # include only the active tab’s screenshot (MVP)
-    for t in tabs_in:
-        if active_id and t.get("tabId") == active_id and t.get("screenshot", {}).get("data"):
-            fmt = (t["screenshot"].get("format") or "jpeg").lower()
-            screenshots = [{"mime": f"image/{fmt}", "dataBase64": t["screenshot"]["data"]}]
-            break
-
-    out = {
-        "correlation_id": p.get("sessionId") or "corr",
-        "user_id": p.get("userId") or "dev-user",
-        "ts": _ms_to_iso(p.get("timestamp")),
-        "event": p.get("interruptionType") or "manual_capture",
-        "active_app": p.get("summary", {}).get("primaryWorkspace") or "web",
-        "active_url_hash": active_hash,
-        "tabs": tabs_out,
-        "screenshots": screenshots,
-        "signals": {"idle_sec": 0},
-        "privacy": {"redacted": True}
-    }
-    return out
 def handler(event, context):
     try:
         payload = _parse_apigw_v2(event)
-        payload = _normalize_teammate_payload(payload) 
 
         # Minimal defaults
-        
         payload.setdefault("user_id", "dev-user")
         payload.setdefault("ts", "")
         payload.setdefault("event", "manual_capture")
@@ -301,33 +238,30 @@ def handler(event, context):
                 "active_cluster": is_active
             }
             summ = summarize(cluster_payload, ocr_text=ocr_text, images=images)
-
             # Create short AI label
             label_src = " ".join([t.get("title","") for t in cl_tabs]) + " " + summ.get("summary","")
             label = _ai_label_from_text(label_src)
 
             activities.append({
-                "activity_id":   summ.get("correlation_id",""),
+                "activity_id":   summ["correlation_id"],
                 "label":         label,
                 "tab_count":     len(cl_tabs),
                 "is_active":     is_active,
                 "summary":       summ.get("summary",""),
                 "next_actions":  summ.get("next_actions", []),
                 "confidence":    float(summ.get("confidence", 0.7)),
-                "tab_hashes":    [t.get("url_hash","") for t in cl_tabs],  # used in response
-                "active_url_hash": active_hash or "",
+                "tab_hashes":    [t.get("url_hash","") for t in cl_tabs],
             })
 
         # ---- Prioritize: active first, then by cluster size desc
         activities.sort(key=lambda a: (not a["is_active"], -a["tab_count"]))
-        # assign ranks after sorting (0 = highest)
+        # assign ranks after sorting
         for r, a in enumerate(activities):
             a["rank"] = r
 
-        # ---- Persist activities and a session summary (no images stored)
+        # ---- Persist activities to DDB (no images stored)
         table = os.getenv("DDB_TABLE")
-        if table and activities:
-            # Save activities
+        if table:
             for a in activities:
                 put_activity_summary(
                     user_id=payload["user_id"],
@@ -337,31 +271,11 @@ def handler(event, context):
                     summary_text=a["summary"],
                     confidence=a["confidence"],
                     next_actions=a["next_actions"],
+                    tab_hashes=a["tab_hashes"],
                     is_active=a["is_active"],
                     rank=a["rank"],
-                    related_hashes=a["tab_hashes"],     # <-- DDB expects related_hashes
-                    active_url_hash=a["active_url_hash"],
                     ttl_days=30,
                 )
-
-            # Also write a SESSION# item based on the primary activity (compat with /insights)
-            primary = activities[0]
-            raw_excerpt = (tabs[0].get("text_sample") or "")[:300] if tabs else ""
-            try:
-                put_session_summary(
-                    user_id=payload["user_id"],
-                    ts_iso=payload.get("ts",""),
-                    correlation_id=primary["activity_id"] or "corr",
-                    summary_text=primary["summary"],
-                    confidence=primary["confidence"],
-                    next_actions=primary["next_actions"],
-                    tab_hashes=primary["tab_hashes"],   # put_session_summary accepts tab_hashes
-                    raw_excerpt=raw_excerpt,
-                    ttl_days=30,
-                )
-            except Exception:
-                # Keep going even if session write fails
-                pass
 
         # ---- Respond immediately with ranked activities
         return {

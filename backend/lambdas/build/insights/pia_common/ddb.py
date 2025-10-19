@@ -1,41 +1,43 @@
+# backend/common/pia_common/ddb.py
 import os
 import boto3
 from functools import lru_cache
 from decimal import Decimal
 from typing import Any, Dict, List
+from datetime import datetime, timedelta, timezone
 
-# ---- session / resource ----
+# -----------------------
+# DynamoDB session helpers
+# -----------------------
+
 def _bool_env(name: str) -> bool:
-    v = os.getenv(name)
-    return str(v).lower() in ("1", "true", "yes", "on")
+    v = (os.getenv(name) or "").strip().lower()
+    return v in {"1", "true", "yes", "on"}
 
 @lru_cache(maxsize=1)
 def _resource():
+    """
+    Returns a cached DynamoDB resource.
+    Honors local testing via:
+      USE_LOCAL_DDB=1
+      DDB_ENDPOINT_URL=http://localhost:8000
+    """
     region = os.getenv("AWS_REGION", "us-east-1")
-    use_local = _bool_env("USE_LOCAL_DDB")
-    endpoint = os.getenv("DDB_ENDPOINT_URL") if use_local else None
+    endpoint = os.getenv("DDB_ENDPOINT_URL") if _bool_env("USE_LOCAL_DDB") else None
     return boto3.resource("dynamodb", region_name=region, endpoint_url=endpoint)
 
 @lru_cache(maxsize=1)
 def _table():
+    """
+    Returns the primary app table from env DDB_TABLE.
+    """
     name = os.environ["DDB_TABLE"]
     return _resource().Table(name)
 
-# ---- numeric coercion for DynamoDB (floats -> Decimal) ----
-def _to_ddb(val: Any) -> Any:
-    # Keep bools as bool (bool is a subclass of int in Python!)
-    if isinstance(val, bool):
-        return val
-    # Convert all numbers to Decimal (boto3 requirement for DDB)
-    if isinstance(val, (int, float, Decimal)):
-        return Decimal(str(val))
-    if isinstance(val, list):
-        return [_to_ddb(v) for v in val]
-    if isinstance(val, dict):
-        return {k: _to_ddb(v) for k, v in val.items()}
-    return val
+# -----------------------
+# Writes
+# -----------------------
 
-# ---- helpers you already call from handlers ----
 def put_session_summary(
     *,
     user_id: str,
@@ -48,9 +50,12 @@ def put_session_summary(
     raw_excerpt: str,
     ttl_days: int = 30,
 ) -> None:
-    from datetime import datetime, timedelta, timezone
-    ttl = int((datetime.now(tz=timezone.utc) + timedelta(days=ttl_days)).timestamp())
-
+    """
+    Persist a session-level summary:
+      PK = USER#{user_id}
+      SK = SESSION#{ts_iso}
+    """
+    ttl = int((datetime.now(timezone.utc) + timedelta(days=ttl_days)).timestamp())
     item = {
         "PK": f"USER#{user_id}",
         "SK": f"SESSION#{ts_iso}",
@@ -60,10 +65,9 @@ def put_session_summary(
         "correlation_id": correlation_id,
         "summary_text": summary_text or "",
         "confidence": Decimal(str(confidence)),
-        # Deep-convert any numeric fields inside actions (e.g., duration_min)
-        "next_actions": _to_ddb(next_actions or []),
+        "next_actions": next_actions or [],
         "tab_hashes": tab_hashes or [],
-        "raw_excerpt": raw_excerpt or "",
+        "raw_excerpt": (raw_excerpt or "")[:1000],
         "ttl": ttl,
     }
     _table().put_item(Item=item)
@@ -77,39 +81,44 @@ def put_activity_summary(
     summary_text: str,
     confidence: float,
     next_actions: List[Dict[str, Any]],
-    is_active: bool,
-    rank: int,
-    related_hashes: List[str],
-    active_url_hash: str,
     ttl_days: int = 7,
+    is_active: bool = False,
 ) -> None:
-    from datetime import datetime, timedelta, timezone
-    ttl = int((datetime.now(tz=timezone.utc) + timedelta(days=ttl_days)).timestamp())
+    """
+    Persist an AI-generated activity/categorization record:
+      PK = USER#{user_id}
+      SK = ACT#{activity_id}#{ts_iso}
 
+    `label` is a human-friendly category name (e.g., "Project plan – Google Docs").
+    `is_active` marks the activity associated with the active tab at capture time.
+    """
+    ttl = int((datetime.now(timezone.utc) + timedelta(days=ttl_days)).timestamp())
     item = {
         "PK": f"USER#{user_id}",
         "SK": f"ACT#{activity_id}#{ts_iso}",
         "type": "activity",
-        "user_id": user_id,
         "activity_id": activity_id,
-        "ts": ts_iso,
         "label": label or "",
-        "summary_text": summary_text or "",
+        "ts": ts_iso,
+        "summary": summary_text or "",
         "confidence": Decimal(str(confidence)),
-        "next_actions": _to_ddb(next_actions or []),
+        "next_actions": next_actions or [],
         "is_active": bool(is_active),
-        "rank": Decimal(str(rank)),
-        "related_hashes": related_hashes or [],
-        "active_url_hash": active_url_hash or "",
         "ttl": ttl,
     }
     _table().put_item(Item=item)
 
+# -----------------------
+# Reads
+# -----------------------
+
 def query_latest_summaries(user_id: str, limit: int = 5) -> List[Dict[str, Any]]:
+    """
+    Return the latest session summaries for a user (newest first).
+    """
     from boto3.dynamodb.conditions import Key
     resp = _table().query(
-        KeyConditionExpression=Key("PK").eq(f"USER#{user_id}") &
-                              Key("SK").begins_with("SESSION#"),
+        KeyConditionExpression=Key("PK").eq(f"USER#{user_id}") & Key("SK").begins_with("SESSION#"),
         ScanIndexForward=False,
         Limit=limit,
     )

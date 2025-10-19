@@ -216,3 +216,6 @@ __pycache__/
 .DS_Store
 backend/lambdas/dist/
 
+
+# build artifacts
+backend/lambdas/dist/*.zip

@@ -84,6 +84,201 @@
 				color: #1f2937;
 				background-color: #e8f1fa;
 			}
+
+			.status-header {
+				margin-bottom: 20px;
+			}
+			.status-badge {
+				display: inline-flex;
+				align-items: center;
+				gap: 8px;
+				background: #e8f1fa;
+				color: #1e5aa8;
+				padding: 6px 12px;
+				border-radius: 20px;
+				font-size: 14px;
+				font-weight: 400;
+				margin-bottom: 12px;
+			}
+			.status-dot {
+				width: 6px;
+				height: 6px;
+				background: #10b981;
+				border-radius: 50%;
+			}
+			.status-message {
+				font-size: 28px;
+				font-weight: 600;
+				color: #1f2937;
+				margin-bottom: 4px;
+				line-height: 36px;
+			}
+			.status-subtitle {
+				font-size: 16px;
+				color: #6b7280;
+				font-weight: 400;
+				line-height: 24px;
+			}
+			/* Tracking Status */
+			.tracking-status {
+				background: #fef3c7;
+				border: 1px solid #fbbf24;
+				border-radius: 10px;
+				padding: 12px;
+				margin: 16px 0;
+				font-size: 14px;
+				color: #92400e;
+				line-height: 21px;
+			}
+			/* Sections */
+			.section {
+				margin: 24px 0;
+			}
+			.section-title {
+				font-size: 18px;
+				font-weight: 600;
+				color: #1f2937;
+				margin-bottom: 16px;
+				line-height: 27px;
+			}
+
+			.welcome-back {
+				background: linear-gradient(135deg, #1e5aa8 0%, #2563eb 100%);
+				color: white;
+				padding: 20px;
+				border-radius: 10px;
+				margin-bottom: 20px;
+			}
+			.welcome-title {
+				font-size: 20px;
+				font-weight: 600;
+				line-height: 30px;
+			}
+
+			.task-card {
+				background: #ffffff;
+				border: 1px solid #e5e7eb;
+				border-radius: 10px;
+				padding: 16px;
+				margin-bottom: 12px;
+				box-shadow: 1px 1px 2px rgba(0, 0, 0, 0.1);
+			}
+			.task-card:hover {
+				border-color: #d1d5db;
+				box-shadow: 2px 2px 4px rgba(0, 0, 0, 0.15);
+			}
+			.task-header {
+				display: flex;
+				align-items: center;
+				gap: 12px;
+				margin-bottom: 8px;
+			}
+			.task-icon {
+				width: 24px;
+				height: 24px;
+				border-radius: 6px;
+				display: flex;
+				align-items: center;
+				justify-content: center;
+				font-size: 14px;
+				font-weight: 600;
+			}
+			.task-icon.email {
+				background: #e8f1fa;
+				color: #1e5aa8;
+			}
+			.task-icon.sheets {
+				background: #dcfce7;
+				color: #16a34a;
+			}
+			.task-icon.docs {
+				background: #fef3c7;
+				color: #d97706;
+			}
+			.task-icon.slides {
+				background: #fce7f3;
+				color: #be185d;
+			}
+			.task-title {
+				font-size: 18px;
+				font-weight: 600;
+				color: #1f2937;
+				flex: 1;
+				line-height: 27px;
+			}
+			.task-time {
+				font-size: 14px;
+				color: #6b7280;
+				font-weight: 400;
+				line-height: 21px;
+			}
+			.task-context {
+				font-size: 14px;
+				color: #6b7280;
+				margin-bottom: 8px;
+				font-weight: 400;
+				line-height: 21px;
+			}
+			.task-description {
+				font-size: 16px;
+				color: #374151;
+				margin-bottom: 12px;
+				font-weight: 400;
+				line-height: 24px;
+			}
+			.task-actions {
+				display: flex;
+				gap: 8px;
+			}
+			.task-actions button {
+				font-size: 16px;
+				padding: 8px 16px;
+				line-height: 24px;
+			}
+
+			.suggestion-card {
+				background: #f8fafc;
+				border: 1px solid #e2e8f0;
+				border-radius: 10px;
+				padding: 16px;
+				margin-bottom: 8px;
+			}
+			.suggestion-meta {
+				font-size: 12px;
+				color: #64748b;
+				margin-bottom: 8px;
+				font-weight: 400;
+				line-height: 18px;
+			}
+
+			.recent-item {
+				padding: 12px 0;
+				border-bottom: 1px solid #f3f4f6;
+			}
+			.recent-item:last-child {
+				border-bottom: none;
+			}
+
+			@media (max-height: 600px) {
+				.section {
+					margin: 16px 0;
+				}
+
+				.task-card {
+					margin-bottom: 8px;
+				}
+			}
+
+			::-webkit-scrollbar {
+				width: 4px;
+			}
+			::-webkit-scrollbar-track {
+				background: #f1f1f1;
+			}
+			::-webkit-scrollbar-thumb {
+				background: #c1c1c1;
+				border-radius: 2px;
+			}
 		</style>
 	</head>
 

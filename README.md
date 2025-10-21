@@ -7,12 +7,21 @@ Mohamed Ghoul (Developer) - [GitHub](https://www.github.com/mohamedghoul), [Link
 Stephen Nguyen (Developer) - [GitHub](https://github.com/ngstephen1), [Linkedin](https://www.linkedin.com/in/nguyenpn1)  
 Thuy Trang Cao (Designer) - [GitHub](https://github.com/trngc), [Linkedin](https://www.linkedin.com/in/thuytrangcao)  
 
+## Tech stacks
+
+	•	AI/LLM: Amazon Bedrock — Claude 4.5 Sonnet (primary), Nova Pro (analytics)
+	•	Compute: AWS Lambda (Python 3.11)
+	•	API: Amazon API Gateway (HTTP API) with CORS & x-api-key auth
+	•	Data: Amazon DynamoDB (single-table design)
+	•	Security/Ops: AWS WAF v2 (rate limiting), CloudWatch (logs/metrics), IAM (least-privilege)
+	•	Client: Chrome Extension (MV3) → posts snapshots to backend
+
 ⚙️ Quick Setup
 
 ```bash
 export AWS_PROFILE=noro-dev
 export AWS_REGION=us-east-1
-export API_ID=<your_http_api_id>      # e.g., sb21puxxcd
+export API_ID=<your_http_api_id>    
 export API_URL=“https://${API_ID}.execute-api.${AWS_REGION}.amazonaws.com/prod”
 
 Use the SAME value set in Lambda env API_KEY

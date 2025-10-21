@@ -210,4 +210,20 @@ $RECYCLE.BIN/
 *.msp
 
 # Windows shortcuts
-*.lnk
+*.lnk.venv/
+__pycache__/
+*.pyc
+.DS_Store
+backend/lambdas/dist/
+
+
+# build artifacts
+backend/lambdas/dist/*.zip
+
+# build & temp artifacts
+backend/lambdas/dist/
+**/dist/*.zip
+/tmp/
+/tmp/**
+/pia_pkg/
+/**/pia_pkg/**

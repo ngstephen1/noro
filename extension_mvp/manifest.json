@@ -1,0 +1,36 @@
+{
+  "manifest_version": 3,
+  "name": "PIA MVP",
+  "version": "0.0.3",
+  "description": "Productivity Intelligence Agent MVP: capture context and show summaries.",
+  "action": {
+    "default_title": "PIA",
+    "default_popup": "popup.html"
+  },
+  "permissions": [
+    "activeTab",
+    "scripting",
+    "storage",
+    "alarms",
+    "notifications",
+    "tabs",
+    "idle"
+  ],
+  "host_permissions": [
+    "http://127.0.0.1:8080/*",
+    "http://localhost:8080/*",
+    "https://docs.google.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://docs.google.com/*"],
+      "js": ["docs_capture.js"],
+      "all_frames": true,
+      "run_at": "document_idle"
+    }
+  ],
+  "minimum_chrome_version": "114"
+}

@@ -44,11 +44,10 @@ def _rate_limit(event: Dict[str, Any], per_min: int = 60) -> bool:
     }
     try:
         ddb.update_item(
-        Key={"PK": pk, "SK": sk},
-        UpdateExpression="ADD req_count :one SET #ttl = :ttl",
-        ConditionExpression="attribute_not_exists(req_count) OR req_count < :limit",
-        ExpressionAttributeValues=expr_vals,
-        ExpressionAttributeNames={"#ttl": "ttl"},  # <-- alias reserved word
+            Key={"PK": pk, "SK": sk},
+            UpdateExpression="ADD req_count :one SET ttl = :ttl",
+            ConditionExpression="attribute_not_exists(req_count) OR req_count < :limit",
+            ExpressionAttributeValues=expr_vals,
         )
         return True
     except ClientError as e:

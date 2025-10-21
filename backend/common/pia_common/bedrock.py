@@ -15,7 +15,16 @@ def _bool(v) -> bool:
 
 USE_BEDROCK    = _bool(os.getenv("USE_BEDROCK", "false"))
 BEDROCK_REGION = os.getenv("BEDROCK_REGION", os.getenv("AWS_REGION", "us-east-1"))
-BEDROCK_MODEL  = os.getenv("BEDROCK_MODEL", "anthropic.claude-3-haiku-20240307-v1:0")
+
+# Prefer env; otherwise fall back to a modern default (Claude 4.5 Sonnet), then older Haiku 3.
+_DEFAULT_MODELS = [
+    "anthropic.claude-sonnet-4.5-20250929-v1:0",
+    "anthropic.claude-3-haiku-20240307-v1:0",
+]
+BEDROCK_MODEL  = os.getenv("BEDROCK_MODEL") or _DEFAULT_MODELS[0]
+
+# Optional secondary model for analytics experiments (e.g., amazon.nova-pro-v1:0)
+BEDROCK_ANALYTICS_MODEL = os.getenv("BEDROCK_ANALYTICS_MODEL", "")
 
 # -----------------------
 # Small helpers
@@ -135,6 +144,86 @@ def _vision_message_blocks(payload: Dict[str, Any], ocr_text: Optional[str], ima
 # -----------------------
 def _bedrock_client():
     return boto3.client("bedrock-runtime", region_name=BEDROCK_REGION)
+
+# -----------------------
+# Bedrock Converse helpers (Nova, etc.)
+# -----------------------
+def _is_nova(model_id: str) -> bool:
+    return str(model_id).startswith("amazon.nova")
+
+def _is_anthropic(model_id: str) -> bool:
+    return str(model_id).startswith("anthropic.")
+
+def _mime_to_format(mime: str) -> str:
+    m = (mime or "").lower()
+    if "png" in m: return "png"
+    if "webp" in m: return "webp"
+    # default to jpeg
+    return "jpeg"
+
+def _converse_content_blocks(text: str, images: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """
+    Build Bedrock Converse content blocks for Nova models.
+    Accepts images as dicts with 'bytes' or 'b64' and 'mime'.
+    """
+    blocks: List[Dict[str, Any]] = []
+    if text:
+        blocks.append({"text": text})
+    for im in images[:2]:
+        raw = im.get("bytes")
+        if not raw:
+            b64 = im.get("b64")
+            if b64:
+                try:
+                    raw = base64.b64decode(b64)
+                except Exception:
+                    raw = None
+        if not raw:
+            continue
+        fmt = _mime_to_format(im.get("mime", "image/jpeg"))
+        blocks.append({"image": {"format": fmt, "source": {"bytes": raw}}})
+    return blocks
+
+def _call_bedrock_converse_text(model_id: str, prompt: str) -> str:
+    """
+    Text-only call via Bedrock Converse API (Nova family).
+    """
+    try:
+        client = _bedrock_client()
+        resp = client.converse(
+            modelId=model_id,
+            messages=[{"role": "user", "content": [{"text": prompt}]}],
+            inferenceConfig={"maxTokens": 256, "temperature": 0.2},
+        )
+        msg = (resp.get("output", {}) or {}).get("message", {})
+        parts = msg.get("content") or []
+        for p in parts:
+            if "text" in p and p["text"]:
+                return p["text"].strip()
+    except Exception:
+        pass
+    return ""
+
+def _call_bedrock_converse_vision(model_id: str, text: str, images: List[Dict[str, Any]]) -> str:
+    """
+    Multimodal (text + up to 2 images) using Bedrock Converse (Nova).
+    """
+    try:
+        client = _bedrock_client()
+        blocks = _converse_content_blocks(text, images or [])
+        resp = client.converse(
+            modelId=model_id,
+            messages=[{"role": "user", "content": blocks}],
+            inferenceConfig={"maxTokens": 512, "temperature": 0.2},
+        )
+        msg = (resp.get("output", {}) or {}).get("message", {})
+        parts = msg.get("content") or []
+        for p in parts:
+            if "text" in p and p["text"]:
+                return p["text"].strip()
+    except Exception:
+        pass
+    return ""
 
 def _call_bedrock_text(prompt: str) -> str:
     try:
@@ -287,15 +376,26 @@ def summarize(payload: Dict[str, Any],
     corr_id = payload.get("correlation_id") or f"c-{uuid.uuid4().hex[:8]}"
 
     txt_only = not images
-    if txt_only:
-        prompt = _make_text_prompt(payload, ocr_text)
-        raw_text = _call_bedrock_text(prompt)
+    prompt = _make_text_prompt(payload, ocr_text)
+
+    if _is_nova(BEDROCK_MODEL):
+        if txt_only:
+            raw_text = _call_bedrock_converse_text(BEDROCK_MODEL, prompt)
+        else:
+            # Build a short text preface for the vision call
+            preface = ("Summarize the user's active work context from tabs and screenshots. "
+                       "Return STRICT JSON with keys: correlation_id, summary, next_actions (array of 2), confidence (0..1). "
+                       "Keep the summary concise (<= 2 sentences).")
+            raw_text = _call_bedrock_converse_vision(BEDROCK_MODEL, preface, images or [])
     else:
-        system = ("You summarize the user's active work context from browser tabs and screenshots. "
-                  "Return STRICT JSON with keys: correlation_id, summary, next_actions (array of 2), confidence (0..1). "
-                  "Keep the summary short, one sentence.")
-        blocks = _vision_message_blocks(payload, ocr_text, images or [])
-        raw_text = _call_bedrock_vision(system, blocks)
+        if txt_only:
+            raw_text = _call_bedrock_text(prompt)
+        else:
+            system = ("You summarize the user's active work context from browser tabs and screenshots. "
+                      "Return STRICT JSON with keys: correlation_id, summary, next_actions (array of 2), confidence (0..1). "
+                      "Keep the summary short, one sentence.")
+            blocks = _vision_message_blocks(payload, ocr_text, images or [])
+            raw_text = _call_bedrock_vision(system, blocks)
 
     obj = _extract_json_block(raw_text) if raw_text else None
     if not obj or not isinstance(obj, dict):

@@ -156,7 +156,8 @@ curl -s -H "x-api-key: $API_KEY" \
 ```
 
 ### AI Models & Config
-•	BEDROCK_MODEL=anthropic.claude-3-haiku-20240307-v1:0
+•	BEDROCK_MODEL=anthropic.claude-4.5
+•	Nova Pro
 •	USE_BEDROCK=true
 •	Region: BEDROCK_REGION=us-east-1
 •	OCR (backup): USE_TEXTRACT=true to enable Textract on screenshots

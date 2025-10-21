@@ -9,7 +9,7 @@ Thuy Trang Cao (Designer) - [GitHub](https://github.com/trngc), [Linkedin](https
 
 ⚙️ Quick Setup
 
-‘’’bash
+```bash
 export AWS_PROFILE=noro-dev
 export AWS_REGION=us-east-1
 export API_ID=<your_http_api_id>      # e.g., sb21puxxcd
@@ -18,11 +18,11 @@ export API_URL=“https://${API_ID}.execute-api.${AWS_REGION}.amazonaws.com/prod
 Use the SAME value set in Lambda env API_KEY
 
 export PIA_API_KEY=<paste_value_from_lambda_env>
-‘’’
+```
 
 Lambda env (ingest):
 
-‘’’
+```
 DDB_TABLE=pia-dev
 USE_BEDROCK=true
 BEDROCK_REGION=us-east-1
@@ -30,7 +30,7 @@ BEDROCK_MODEL=<Claude_4_5_Sonnet_modelId>
 USE_TEXTRACT=true                 # optional OCR
 API_KEY=<same_as_above>
 ANALYTICS_MODEL=<Nova_Pro_modelId>  # optional/future
-‘’’
+```
 
 ⸻
 
@@ -48,13 +48,13 @@ CORS: * enabled
 
 1) Health
 
-‘’‘bash
+```bash
 curl -sS -H “x-api-key: $PIA_API_KEY” “$API_URL/health” | jq .
-‘’’
+```
 
 2) Minimal context (tabs only)
 
-‘’’bash
+```bash
 cat >/tmp/context.json <<‘JSON’
 {
 “correlation_id”:“c-demo-1”,
@@ -74,11 +74,11 @@ JSON
 
 curl -sS -H “x-api-key: $PIA_API_KEY” -H “content-type: application/json” 
 –data-binary @/tmp/context.json “$API_URL/context” | jq .
-‘’’
+```
 
 3) Teammate payload (windows/tabs/screens)
 
-‘’’bash
+```bash
 cat >/tmp/teammate_payload.json <<‘JSON’
 {
 “sessionId”: “session_1703123456789_abc123”,
@@ -110,14 +110,14 @@ JSON
 
 curl -sS -H “x-api-key: $PIA_API_KEY” -H “content-type: application/json” 
 –data-binary @/tmp/teammate_payload.json “$API_URL/context” | jq .
-‘’’
+```
 
 4) Fetch insights
 
-‘’‘bash
+```
 curl -sS -H “x-api-key: $PIA_API_KEY” 
 “$API_URL/insights?user_id=dev-user&limit=5” | jq .
-‘’’
+```
 
 ⸻
 
@@ -136,11 +136,11 @@ $$
 
 🔭 Observability
 
-‘’‘bash
+```bash
 aws logs tail /aws/lambda/pia-ingest-context –since 15m –follow
 aws logs tail /aws/lambda/pia-get-insights  –since 15m –follow
 aws logs tail /aws/lambda/pia-health        –since 15m –follow
-‘’’
+```
 
 ⸻
 
@@ -148,15 +148,15 @@ aws logs tail /aws/lambda/pia-health        –since 15m –follow
 
 Find model IDs (Claude 4.5 Sonnet / Nova Pro):
 
-‘’‘bash
+```bash
 aws bedrock list-foundation-models –region $AWS_REGION 
 –query “modelSummaries[?contains(modelName,‘Claude 4.5’) || contains(modelName,‘Nova Pro’)].[modelName,modelId]” 
 –output table
-‘’’
+```
 
 Git flow:
 
-‘’’bash
+```bash
 git checkout -b feat/aws-backend-mvp
 git add .
 git commit -m “Backend MVP: Claude 4.5 Sonnet + API + DDB”
@@ -164,7 +164,7 @@ git push -u origin feat/aws-backend-mvp
 
 open PR to upstream/main
 
-‘’’
+```
 
 ⸻
 

@@ -1,6 +1,6 @@
 # Noro: The Productivity Intelligence Agent
 
-> **Noro** senses your work, analyzes context with **Claude 4.5 Sonnet** (Bedrock), and returns focused insights via **API Gateway + Lambda + DynamoDB**. Optional analytics with **Amazon Nova Pro**.
+> **Noro** senses your work, analyzes context with **Claude 4.5 Sonnet** (Bedrock), and returns focused insights via **API Gateway + Lambda + DynamoDB**. Analytics with **Amazon Nova Pro**.
 
 ## Created by Team Get Noro Right Now
 Mohamed Ghoul (Developer) - [GitHub](https://www.github.com/mohamedghoul), [Linkedin](https://www.linkedin.com/in/mohamedghoul)  

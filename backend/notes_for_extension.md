@@ -4,12 +4,41 @@
 `https://sb21puxxcd.execute-api.us-east-1.amazonaws.com/prod`
 
 **Auth header (simple shared key, validated in Lambda)**  
-`x-api-key: imcyLnEytbFl6gPXsQPYKQEL1gMSY15AV0hOsmeA`
+`x-api-key: firjfriofwqwwfdnwcmd`
 
 **Endpoints**
 - `GET /health` – sanity check + table name
 - `POST /context` – send a session snapshot (tabs + optional screenshot)
 - `GET /insights?user_id=<uuid>&limit=<N>` – latest N summaries
+```bash
+# 0) Vars
+export API_URL="https://${API_ID}.execute-api.${AWS_REGION}.amazonaws.com/prod"
+export KEY="$PIA_API_KEY"
+
+# 1) Health (expects key)
+curl -sS -H "x-api-key: $KEY" "$API_URL/health" | jq .
+
+# 2) Seed context (sample payload you used)
+curl -sS -H "x-api-key: $KEY" -H "content-type: application/json" \
+  --data-binary @/tmp/teammate_payload.json \
+  "$API_URL/context" | jq .
+
+# 3) Page 1 insights
+curl -sS -H "x-api-key: $KEY" \
+  "$API_URL/insights?user_id=dev-user&limit=5" | tee /tmp/insights1.json | jq .
+
+# 4) Page 2 (use cursor from previous output)
+CURSOR=$(jq -r '.cursor' /tmp/insights1.json)
+curl -sS -H "x-api-key: $KEY" \
+  "$API_URL/insights?user_id=dev-user&limit=5&cursor=$CURSOR" | jq .
+
+
+CURSOR=eyJTSyI6ICJTRVNTSU9OIzIwMjUtMTAtMTlUMTM6MDA6MDBaIiwgIlBLIjogIlVTRVIjZGV2LXVzZXIifQ==
+
+*this is real
+
+```
+
 
 CORS: `*` • Throttle: burst **10**, rate **5 rps**
 
@@ -144,15 +173,16 @@ API_URL="https://sb21puxxcd.execute-api.us-east-1.amazonaws.com/prod"
 API_KEY="<shared-key>"
 
 # Health
-curl -i -H "x-api-key: $API_KEY" "$API_URL/health"
+curl -sS -H "x-api-key: $PIA_API_KEY" "$BASE_URL/health" | jq .
 
-# Context (extension JSON)
-curl -s -H "x-api-key: $API_KEY" -H "content-type: application/json" \
-  -d @teammate_payload.json "$API_URL/context" | jq .
+# Context (their JSON shape works)
+curl -sS -H "x-api-key: $PIA_API_KEY" -H "content-type: application/json" \
+  --data-binary @/tmp/teammate_payload.json \
+  "$BASE_URL/context" | jq .
 
 # Insights
-curl -s -H "x-api-key: $API_KEY" \
-  "$API_URL/insights?user_id=dev-user&limit=5" | jq .
+curl -sS -H "x-api-key: $PIA_API_KEY" \
+  "$BASE_URL/insights?user_id=dev-user&limit=5" | jq .
 ```
 
 ### AI Models & Config
@@ -215,3 +245,57 @@ aws logs tail /aws/lambda/pia-health        --since 5m
 •	403 forbidden: missing/wrong x-api-key or Lambda API_KEY not set.
 •	Decimal errors: we coerce floats to Decimal before DDB writes in current code.
 •	Import errors: ensure backend/common/pia_common/*.py is packaged into each Lambda zip.
+
+
+### Model config (what you’re running now + how to switch later)
+	•	You’re currently good with Amazon Nova Pro (summaries + labels).
+	•	When Claude 4.5 Sonnet becomes available for your account/region, just update Lambda env:
+
+```bash
+cat >/tmp/env.json <<'JSON'
+{
+  "Variables": {
+    "DDB_TABLE": "pia-dev",
+    "USE_BEDROCK": "true",
+    "BEDROCK_REGION": "us-east-1",
+    "BEDROCK_MODEL": "anthropic.claude-4.5-sonnet-2024-xx-xx-vX:0",
+    "BEDROCK_LABEL_MODEL": "anthropic.claude-4.5-sonnet-2024-xx-xx-vX:0",
+    "USE_TEXTRACT": "true",
+    "RL_PER_MIN": "60"
+  }
+}
+JSON
+aws lambda update-function-configuration \
+  --function-name pia-ingest-context \
+  --environment file:///tmp/env.json
+aws lambda wait function-updated --function-name pia-ingest-context
+```
+
+### Extension Usgae
+
+```java
+const BASE_URL = "https://sb21puxxcd.execute-api.us-east-1.amazonaws.com/prod";
+const API_KEY  = "<your key>";
+const userId   = "dev-user"; // or their UUID
+
+// send snapshot
+async function sendContext(payload) {
+  await fetch(`${BASE_URL}/context`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "x-api-key": API_KEY
+    },
+    body: JSON.stringify(payload)
+  });
+}
+
+// poll insights every 30s
+setInterval(async () => 
+  const res = await fetch(`${BASE_URL}/insights?user_id=${userId}&limit=5`, {
+    headers: { "x-api-key": API_KEY }
+  });
+  const data = await res.json();
+  // TODO: render data.items in the popup
+}, 30000);
+```

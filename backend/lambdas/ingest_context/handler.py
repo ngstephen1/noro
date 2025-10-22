@@ -1,32 +1,93 @@
 # backend/lambdas/ingest_context/handler.py
-import os, json, base64, binascii, re
+import os, json, base64, binascii, re, time, hashlib
 from collections import defaultdict
 from typing import Any, Dict, List
 from datetime import datetime, timezone
 from urllib.parse import urlparse
+from decimal import Decimal
+from botocore.exceptions import ClientError
 
 import boto3
 
-from pia_common.bedrock import summarize               # real or stub (by env)
+from pia_common.bedrock import summarize  # real or stub (by env)
 from pia_common.ddb import (
-    put_activity_summary,      # writes ACT# items
-    put_session_summary,       # writes SESSION# item (compat with insights)
+    put_activity_summary,  # writes ACT# items
+    put_session_summary,   # writes SESSION# item (compat with /insights)
 )
+
+# --------------------------- MVP rate limiting ------------------------------
+
+def _rate_limit(event: Dict[str, Any], per_min: int = 60) -> bool:
+    """
+    Simple per-minute token bucket keyed by x-api-key (fallback: source IP).
+    Uses DDB table already configured (DDB_TABLE). Returns True if allowed.
+    """
+    headers = (event.get("headers") or {})
+    key = headers.get("x-api-key") or headers.get("X-Api-Key") \
+        or (event.get("requestContext", {}).get("http", {}).get("sourceIp", "anon"))
+
+    # Stable short hash
+    h = hashlib.sha256(str(key).encode("utf-8")).hexdigest()[:16]
+    minute = int(time.time() // 60)
+    pk = f"RL#KEY#{h}"
+    sk = f"MIN#{minute}"
+
+    table_name = os.environ.get("DDB_TABLE")
+    if not table_name:
+        return True  # no DDB, skip limiting
+
+    ddb = boto3.resource("dynamodb").Table(table_name)
+    expr_vals = {
+        ":one":   Decimal(1),
+        ":ttl":   int(time.time()) + 90,
+        ":limit": Decimal(per_min),
+    }
+    try:
+        ddb.update_item(
+        Key={"PK": pk, "SK": sk},
+        UpdateExpression="ADD req_count :one SET #ttl = :ttl",
+        ConditionExpression="attribute_not_exists(req_count) OR req_count < :limit",
+        ExpressionAttributeValues=expr_vals,
+        ExpressionAttributeNames={"#ttl": "ttl"},  # <-- alias reserved word
+        )
+        return True
+    except ClientError as e:
+        if e.response["Error"]["Code"] == "ConditionalCheckFailedException":
+            return False
+        raise
 
 # ----------------------- API Gateway helpers -------------------------------
 
-def _parse_apigw_v2(event):
-    """Accept API Gateway HTTP API v2 or raw JSON."""
+def _parse_apigw_v2(event: Any) -> Dict[str, Any]:
+    """
+    Accept API Gateway HTTP API v2 or raw JSON.
+    Handles optional base64-encoded body (isBase64Encoded).
+    """
     if isinstance(event, dict) and event.get("version") == "2.0" and "requestContext" in event:
         body = event.get("body")
-        return json.loads(body) if isinstance(body, str) else (body or {})
+        if isinstance(body, str):
+            if event.get("isBase64Encoded"):
+                try:
+                    body = base64.b64decode(body).decode("utf-8", errors="ignore")
+                except Exception:
+                    body = body  # fall back to raw
+            try:
+                return json.loads(body)
+            except Exception:
+                return {}
+        return body or {}
     if isinstance(event, dict) and "body" in event:
         b = event["body"]
-        return json.loads(b) if isinstance(b, str) else (b or {})
+        if isinstance(b, str):
+            try:
+                return json.loads(b)
+            except Exception:
+                return {}
+        return b or {}
     return event if isinstance(event, dict) else {}
 
 def _bool(v) -> bool:
-    return str(v).lower() in {"1","true","yes","on"}
+    return str(v).lower() in {"1", "true", "yes", "on"}
 
 # --------------------- Screenshot normalization / OCR ----------------------
 
@@ -47,7 +108,7 @@ def _normalize_screenshots(payload: Dict[str, Any]) -> List[Dict[str, Any]]:
         if not isinstance(it, dict):
             continue
         mime = (it.get("mime") or "image/png").strip()
-        b64  = it.get("dataBase64") or it.get("data_base64") or ""
+        b64 = it.get("dataBase64") or it.get("data_base64") or ""
         if not b64:
             continue
         try:
@@ -68,7 +129,7 @@ def _ocr_with_textract(images: List[Dict[str, Any]]) -> str:
     """
     if not images:
         return ""
-    textract = boto3.client("textract", region_name=os.getenv("AWS_REGION","us-east-1"))
+    textract = boto3.client("textract", region_name=os.getenv("AWS_REGION", "us-east-1"))
     chunks: List[str] = []
     for im in images[:2]:
         try:
@@ -82,7 +143,7 @@ def _ocr_with_textract(images: List[Dict[str, Any]]) -> str:
 
 # -------------------------- Clustering helpers -----------------------------
 
-_STOP = {"the","and","a","an","to","of","for","in","on","with","your","you"}
+_STOP = {"the", "and", "a", "an", "to", "of", "for", "in", "on", "with", "your", "you"}
 
 def _tokens(s: str):
     s = (s or "").lower()
@@ -98,12 +159,18 @@ def _root_domain(u: str):
     return ".".join(parts[-2:]) if len(parts) >= 2 else h
 
 def _app_kind(u: str, title: str):
-    u = u or ""; t = (title or "").lower()
-    if "docs.google.com" in u:                   return "gdocs"
-    if "spreadsheets" in u or "sheets" in u:     return "gsheets"
-    if "presentation" in u or "slides" in u:     return "gslides"
-    if "wikipedia.org" in u:                     return "wiki"
-    if "mail.google.com" in u or "gmail" in t:   return "gmail"
+    u = u or ""
+    t = (title or "").lower()
+    if "docs.google.com" in u:
+        return "gdocs"
+    if "spreadsheets" in u or "sheets" in u:
+        return "gsheets"
+    if "presentation" in u or "slides" in u:
+        return "gslides"
+    if "wikipedia.org" in u:
+        return "wiki"
+    if "mail.google.com" in u or "gmail" in t:
+        return "gmail"
     return "web"
 
 def _sim(a, b):
@@ -111,19 +178,21 @@ def _sim(a, b):
     score = 0.0
     if a["root"] and a["root"] == b["root"] and a["kind"] == b["kind"]:
         score += 0.5
-    def jac(x,y):
-        if not x or not y: return 0.0
-        inter = len(x & y); union = len(x | y)
-        return inter/union if union else 0.0
+    def jac(x, y):
+        if not x or not y:
+            return 0.0
+        inter = len(x & y)
+        union = len(x | y)
+        return inter / union if union else 0.0
     score += 0.3 * jac(a["title_tokens"], b["title_tokens"])
     score += 0.2 * jac(a["sample_tokens"], b["sample_tokens"])
     return min(score, 1.0)
 
-def _featurize_tabs(tabs: List[Dict[str,Any]]):
+def _featurize_tabs(tabs: List[Dict[str, Any]]):
     feats = []
     for i, t in enumerate(tabs):
-        u = t.get("url") or t.get("url_hash","")
-        title = t.get("title","")
+        u = t.get("url") or t.get("url_hash", "")
+        title = t.get("title", "")
         sample = (t.get("text_sample") or "") + " " + (t.get("ocr_excerpt") or "")
         feats.append({
             "i": i,
@@ -134,7 +203,7 @@ def _featurize_tabs(tabs: List[Dict[str,Any]]):
         })
     return feats
 
-def _cluster_tabs_idx(tabs: List[Dict[str,Any]]):
+def _cluster_tabs_idx(tabs: List[Dict[str, Any]]):
     """Single-link clustering with a simple similarity threshold."""
     feats = _featurize_tabs(tabs)
     n = len(feats)
@@ -144,14 +213,15 @@ def _cluster_tabs_idx(tabs: List[Dict[str,Any]]):
             parent[x] = parent[parent[x]]
             x = parent[x]
         return x
-    def union(a,b):
+    def union(a, b):
         ra, rb = find(a), find(b)
-        if ra != rb: parent[rb] = ra
+        if ra != rb:
+            parent[rb] = ra
     THRESH = 0.55
     for i in range(n):
-        for j in range(i+1, n):
+        for j in range(i + 1, n):
             if _sim(feats[i], feats[j]) >= THRESH:
-                union(i,j)
+                union(i, j)
     buckets = defaultdict(list)
     for idx in range(n):
         buckets[find(idx)].append(idx)
@@ -159,57 +229,117 @@ def _cluster_tabs_idx(tabs: List[Dict[str,Any]]):
 
 # -------------------------- AI label helper --------------------------------
 
+def _model_kind(model_id: str) -> str:
+    mid = (model_id or "").lower()
+    if mid.startswith("amazon.nova"):
+        return "nova"
+    if mid.startswith("anthropic."):
+        return "anthropic"
+    return "other"
+
 def _ai_label_from_text(text: str) -> str:
     """
     Very short (2–4 words) Title-Case label for an activity.
-    Uses Bedrock if enabled, else a heuristic.
+    Tries Bedrock (supports Anthropic Claude 4.5 Sonnet and Amazon Nova Pro via Converse).
+    Falls back to a heuristic if anything fails.
     """
     use_bedrock = _bool(os.getenv("USE_BEDROCK", "false"))
     label = ""
     if use_bedrock:
         try:
-            client = boto3.client("bedrock-runtime", region_name=os.getenv("BEDROCK_REGION","us-east-1"))
-            model  = os.getenv("BEDROCK_MODEL","anthropic.claude-3-haiku-20240307-v1:0")
+            region = os.getenv("BEDROCK_REGION", os.getenv("AWS_REGION", "us-east-1"))
+            model  = os.getenv("BEDROCK_LABEL_MODEL") or os.getenv("BEDROCK_MODEL") or "anthropic.claude-sonnet-4.5-20250929-v1:0"
             prompt = (
                 "Create a very short label (2-4 words, Title Case, no punctuation) for this task context.\n"
                 "Return strictly JSON: {\"label\": \"...\"}\n\n"
                 f"CONTEXT:\n{text[:2000]}"
             )
-            body = {
-                "anthropic_version":"bedrock-2023-05-31",
-                "max_tokens": 64,
-                "temperature": 0.2,
-                "messages":[{"role":"user","content":[{"type":"text","text":prompt}]}]
-            }
-            resp = client.invoke_model(modelId=model, body=json.dumps(body))
-            raw  = json.loads(resp["body"].read())
-            txt  = raw["content"][0]["text"]
-            try:
-                label = json.loads(txt).get("label","")
-            except Exception:
-                label = (txt or "").splitlines()[0].strip()
+
+            rt = boto3.client("bedrock-runtime", region_name=region)
+            kind = _model_kind(model)
+
+            if kind == "anthropic":
+                body = {
+                    "anthropic_version": "bedrock-2023-05-31",
+                    "max_tokens": 64,
+                    "temperature": 0.2,
+                    "messages": [{"role": "user", "content": [{"type": "text", "text": prompt}]}],
+                }
+                resp = rt.invoke_model(
+                    modelId=model,
+                    body=json.dumps(body),
+                    accept="application/json",
+                    contentType="application/json",
+                )
+                raw = json.loads(resp["body"].read())
+                txt = ""
+                for blk in raw.get("content", []) or []:
+                    if blk.get("type") == "text" and blk.get("text"):
+                        txt = blk["text"]
+                        break
+                if not txt and "output_text" in raw:
+                    txt = str(raw["output_text"])
+            elif kind == "nova":
+                conv = rt.converse(
+                    modelId=model,
+                    messages=[{"role": "user", "content": [{"text": prompt}]}],
+                    inferenceConfig={"maxTokens": 64, "temperature": 0.2},
+                )
+                out_blocks = (conv.get("output", {}) or {}).get("message", {}).get("content", []) or []
+                txt = "".join(b.get("text", "") for b in out_blocks if isinstance(b, dict))
+            else:
+                # Unknown provider: try Anthropic schema as best effort
+                body = {
+                    "anthropic_version": "bedrock-2023-05-31",
+                    "max_tokens": 64,
+                    "temperature": 0.2,
+                    "messages": [{"role": "user", "content": [{"type": "text", "text": prompt}]}],
+                }
+                resp = rt.invoke_model(
+                    modelId=model,
+                    body=json.dumps(body),
+                    accept="application/json",
+                    contentType="application/json",
+                )
+                raw = json.loads(resp["body"].read())
+                txt = ""
+                for blk in raw.get("content", []) or []:
+                    if blk.get("type") == "text" and blk.get("text"):
+                        txt = blk["text"]
+                        break
+
+            if isinstance(txt, str):
+                try:
+                    m = re.search(r"\{.*\}", txt, re.S)
+                    if m:
+                        label = json.loads(m.group(0)).get("label", "") or ""
+                except Exception:
+                    pass
+                if not label:
+                    label = (txt or "").splitlines()[0].strip()
         except Exception:
             label = ""
+
     if not label:
-        # heuristic: first 3 capitalized keywords
+        # Heuristic: first 3 capitalized keywords
         toks = [t.capitalize() for t in list(_tokens(text))[:3]]
         label = " ".join(toks) or "Activity"
-    label = re.sub(r"[^A-Za-z0-9 ]+","", label).strip().title()
+    label = re.sub(r"[^A-Za-z0-9 ]+", "", label).strip().title()
     return label or "Activity"
 
-# ------------------------------- Handler -----------------------------------
+# -------------------------- Teammate payload shim --------------------------
+
 def _ms_to_iso(ms):
     try:
-        return datetime.fromtimestamp(int(ms)/1000, tz=timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
+        return datetime.fromtimestamp(int(ms) / 1000, tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     except Exception:
         return ""
 
-def _normalize_teammate_payload(p):
+def _normalize_teammate_payload(p: Dict[str, Any]) -> Dict[str, Any]:
     """If payload has windows/tabs structure, convert to our internal shape."""
     if not isinstance(p, dict) or "windows" not in p:
         return p  # already our shape
 
-    # pick first window; find active tab
     win = (p.get("windows") or [{}])[0] or {}
     active_id = win.get("activeTabId")
     tabs_in = win.get("tabs") or []
@@ -218,25 +348,19 @@ def _normalize_teammate_payload(p):
     active_hash = ""
     for t in tabs_in:
         url = t.get("url") or ""
-        # choose a hash; fallback to tabId/type/title if URL missing
         url_hash = (t.get("url") or f"{t.get('type','')}/{t.get('tabId','') or t.get('title','')}")[:64]
         if active_id and t.get("tabId") == active_id:
             active_hash = url_hash
-        # screenshot
-        sc = t.get("screenshot") or {}
-        mime = f"image/{(sc.get('format') or 'jpeg').lower()}"
-        data_b64 = sc.get("data") or ""
         tabs_out.append({
-            "title": t.get("title",""),
+            "title": t.get("title", ""),
             "url": url,
             "url_hash": url_hash,
-            "text_sample": "",             # can be filled later from OCR/vision
-            "ocr_excerpt": "",             # optional
-            "type_hint": t.get("type",""), # category hint
+            "text_sample": "",
+            "ocr_excerpt": "",
+            "type_hint": t.get("type", ""),
         })
 
     screenshots = []
-    # include only the active tab’s screenshot (MVP)
     for t in tabs_in:
         if active_id and t.get("tabId") == active_id and t.get("screenshot", {}).get("data"):
             fmt = (t["screenshot"].get("format") or "jpeg").lower()
@@ -253,23 +377,38 @@ def _normalize_teammate_payload(p):
         "tabs": tabs_out,
         "screenshots": screenshots,
         "signals": {"idle_sec": 0},
-        "privacy": {"redacted": True}
+        "privacy": {"redacted": True},
     }
     return out
+
+# -------------------------------- Handler ----------------------------------
+
 def handler(event, context):
     try:
+        # Parse and normalize the request
         payload = _parse_apigw_v2(event)
-        payload = _normalize_teammate_payload(payload) 
+        payload = _normalize_teammate_payload(payload)
+
+        # Rate limit (MVP) — configurable via RL_PER_MIN (default 60)
+        per_min = int(os.getenv("RL_PER_MIN", "60"))
+        if not _rate_limit(event, per_min=per_min):
+            return {
+                "statusCode": 429,
+                "headers": {
+                    "content-type": "application/json",
+                    "access-control-allow-origin": "*",
+                },
+                "body": json.dumps({"ok": False, "error": "rate_limited"}),
+            }
 
         # Minimal defaults
-        
         payload.setdefault("user_id", "dev-user")
         payload.setdefault("ts", "")
         payload.setdefault("event", "manual_capture")
         payload.setdefault("active_app", "chrome")
         tabs = payload.get("tabs") or []
         if not tabs:
-            tabs = [{"title": payload.get("active_app",""), "url_hash":"", "text_sample":""}]
+            tabs = [{"title": payload.get("active_app", ""), "url_hash": "", "text_sample": ""}]
             payload["tabs"] = tabs
 
         # Identify active tab (prefer explicit hash if provided)
@@ -280,11 +419,11 @@ def handler(event, context):
                 active_idx = i
                 break
 
-        # ---- Screenshots & optional OCR
+        # Screenshots & optional OCR
         images = _normalize_screenshots(payload)
         ocr_text = _ocr_with_textract(images) if _bool(os.getenv("USE_TEXTRACT")) else ""
 
-        # ---- Cluster tabs into activities
+        # Cluster tabs into activities
         clusters_idx = _cluster_tabs_idx(tabs) if len(tabs) > 1 else [[0]]
         activities: List[Dict[str, Any]] = []
 
@@ -296,35 +435,35 @@ def handler(event, context):
             # Summarize cluster (LLM can use titles + text samples + OCR; images optional)
             cluster_payload = {
                 "user_id": payload["user_id"],
-                "event": payload.get("event","manual_capture"),
+                "event": payload.get("event", "manual_capture"),
                 "tabs": cl_tabs,
-                "active_cluster": is_active
+                "active_cluster": is_active,
+                "active_url_hash": active_hash or "",
             }
             summ = summarize(cluster_payload, ocr_text=ocr_text, images=images)
 
             # Create short AI label
-            label_src = " ".join([t.get("title","") for t in cl_tabs]) + " " + summ.get("summary","")
+            label_src = " ".join([t.get("title", "") for t in cl_tabs]) + " " + summ.get("summary", "")
             label = _ai_label_from_text(label_src)
 
             activities.append({
-                "activity_id":   summ.get("correlation_id",""),
-                "label":         label,
-                "tab_count":     len(cl_tabs),
-                "is_active":     is_active,
-                "summary":       summ.get("summary",""),
-                "next_actions":  summ.get("next_actions", []),
-                "confidence":    float(summ.get("confidence", 0.7)),
-                "tab_hashes":    [t.get("url_hash","") for t in cl_tabs],  # used in response
-                "active_url_hash": active_hash or "",
+                "activity_id":      summ.get("correlation_id", ""),
+                "label":            label,
+                "tab_count":        len(cl_tabs),
+                "is_active":        is_active,
+                "summary":          summ.get("summary", ""),
+                "next_actions":     summ.get("next_actions", []),
+                "confidence":       float(summ.get("confidence", 0.7)),
+                "tab_hashes":       [t.get("url_hash", "") for t in cl_tabs],
+                "active_url_hash":  active_hash or "",
             })
 
-        # ---- Prioritize: active first, then by cluster size desc
+        # Prioritize: active first, then by cluster size desc
         activities.sort(key=lambda a: (not a["is_active"], -a["tab_count"]))
-        # assign ranks after sorting (0 = highest)
-        for r, a in enumerate(activities):
+        for r, a in enumerate(activities):  # assign ranks after sorting (0 = highest)
             a["rank"] = r
 
-        # ---- Persist activities and a session summary (no images stored)
+        # Persist activities and a session summary (no images stored)
         table = os.getenv("DDB_TABLE")
         if table and activities:
             # Save activities
@@ -332,14 +471,14 @@ def handler(event, context):
                 put_activity_summary(
                     user_id=payload["user_id"],
                     activity_id=a["activity_id"],
-                    ts_iso=payload.get("ts",""),
+                    ts_iso=payload.get("ts", ""),
                     label=a["label"],
                     summary_text=a["summary"],
                     confidence=a["confidence"],
                     next_actions=a["next_actions"],
                     is_active=a["is_active"],
                     rank=a["rank"],
-                    related_hashes=a["tab_hashes"],     # <-- DDB expects related_hashes
+                    related_hashes=a["tab_hashes"],     # ddb uses related_hashes
                     active_url_hash=a["active_url_hash"],
                     ttl_days=30,
                 )
@@ -350,12 +489,12 @@ def handler(event, context):
             try:
                 put_session_summary(
                     user_id=payload["user_id"],
-                    ts_iso=payload.get("ts",""),
+                    ts_iso=payload.get("ts", ""),
                     correlation_id=primary["activity_id"] or "corr",
                     summary_text=primary["summary"],
                     confidence=primary["confidence"],
                     next_actions=primary["next_actions"],
-                    tab_hashes=primary["tab_hashes"],   # put_session_summary accepts tab_hashes
+                    tab_hashes=primary["tab_hashes"],
                     raw_excerpt=raw_excerpt,
                     ttl_days=30,
                 )
@@ -363,18 +502,18 @@ def handler(event, context):
                 # Keep going even if session write fails
                 pass
 
-        # ---- Respond immediately with ranked activities
+        # Respond immediately with ranked activities
         return {
             "statusCode": 200,
             "headers": {
                 "content-type": "application/json",
-                "access-control-allow-origin": "*"
+                "access-control-allow-origin": "*",
             },
             "body": json.dumps({
                 "ok": True,
                 "primary_activity_id": activities[0]["activity_id"] if activities else None,
-                "activities": activities
-            })
+                "activities": activities,
+            }),
         }
 
     except Exception as e:
@@ -382,7 +521,7 @@ def handler(event, context):
             "statusCode": 500,
             "headers": {
                 "content-type": "application/json",
-                "access-control-allow-origin": "*"
+                "access-control-allow-origin": "*",
             },
-            "body": json.dumps({"ok": False, "error": str(e)})
+            "body": json.dumps({"ok": False, "error": str(e)}),
         }

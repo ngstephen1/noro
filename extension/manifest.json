@@ -7,10 +7,9 @@
 		"default_popup": "index.html",
 		"default_title": "Noro"
 	},
-	"permissions": ["activeTab", "tabs", "storage", "scripting", "idle"],
+	"permissions": ["activeTab", "tabs", "storage", "scripting", "idle", "notifications"],
 	"host_permissions": ["<all_urls>"],
 	"background": {
-
 		"service_worker": "dist/background.js",
 		"type": "module"
 	},

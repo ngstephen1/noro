@@ -14,9 +14,15 @@
 		"type": "module"
 	},
 	"icons": {
-		"16": "/public/assets/icon_16.png",
-		"32": "/public/assets/icon_32.png",
-		"48": "/public/assets/icon_48.png",
-		"128": "/public/assets/icon_128.png"
-	}
+		"16": "public/assets/icons/idle/icon_idle_16.png",
+		"32": "public/assets/icons/idle/icon_idle_32.png",
+		"48": "public/assets/icons/idle/icon_idle_48.png",
+		"128": "public/assets/icons/idle/icon_idle_128.png"
+	},
+	"web_accessible_resources": [
+		{
+			"resources": ["public/assets/icons/**/*.png"],
+			"matches": ["<all_urls>"]
+		}
+	]
 }

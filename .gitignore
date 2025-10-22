@@ -227,3 +227,4 @@ backend/lambdas/dist/
 /tmp/**
 /pia_pkg/
 /**/pia_pkg/**
+backend/lambdas/test_img.png

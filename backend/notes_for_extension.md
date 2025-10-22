@@ -10,17 +10,36 @@
 - `GET /health` – sanity check + table name
 - `POST /context` – send a session snapshot (tabs + optional screenshot)
 - `GET /insights?user_id=<uuid>&limit=<N>` – latest N summaries
-
 ```bash
-BASE_URL=https://sb21puxxcd.execute-api.us-east-1.amazonaws.com/prod
-Headers:
-  x-api-key: <your key>
-  content-type: application/json
-Routes:
-  GET  /health
-  POST /context
-  GET  /insights?user_id=<uuid>&limit=5
+# 0) Vars
+export API_URL="https://${API_ID}.execute-api.${AWS_REGION}.amazonaws.com/prod"
+export KEY="$PIA_API_KEY"
+
+# 1) Health (expects key)
+curl -sS -H "x-api-key: $KEY" "$API_URL/health" | jq .
+
+# 2) Seed context (sample payload you used)
+curl -sS -H "x-api-key: $KEY" -H "content-type: application/json" \
+  --data-binary @/tmp/teammate_payload.json \
+  "$API_URL/context" | jq .
+
+# 3) Page 1 insights
+curl -sS -H "x-api-key: $KEY" \
+  "$API_URL/insights?user_id=dev-user&limit=5" | tee /tmp/insights1.json | jq .
+
+# 4) Page 2 (use cursor from previous output)
+CURSOR=$(jq -r '.cursor' /tmp/insights1.json)
+curl -sS -H "x-api-key: $KEY" \
+  "$API_URL/insights?user_id=dev-user&limit=5&cursor=$CURSOR" | jq .
+
+
+CURSOR=eyJTSyI6ICJTRVNTSU9OIzIwMjUtMTAtMTlUMTM6MDA6MDBaIiwgIlBLIjogIlVTRVIjZGV2LXVzZXIifQ==
+
+*this is real
+
 ```
+
+
 CORS: `*` • Throttle: burst **10**, rate **5 rps**
 
 ---

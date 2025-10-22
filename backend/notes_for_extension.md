@@ -4,7 +4,7 @@
 `https://sb21puxxcd.execute-api.us-east-1.amazonaws.com/prod`
 
 **Auth header (simple shared key, validated in Lambda)**  
-`x-api-key: imcyLnEytbFl6gPXsQPYKQEL1gMSY15AV0hOsmeA`
+`x-api-key: firjfriofwqwwfdnwcmd`
 
 **Endpoints**
 - `GET /health` – sanity check + table name
@@ -272,7 +272,7 @@ async function sendContext(payload) {
 }
 
 // poll insights every 30s
-setInterval(async () => {
+setInterval(async () => 
   const res = await fetch(`${BASE_URL}/insights?user_id=${userId}&limit=5`, {
     headers: { "x-api-key": API_KEY }
   });
